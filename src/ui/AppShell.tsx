@@ -1,0 +1,110 @@
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
+import { Icon, type IconName } from './Icon';
+import { Logo } from './Logo';
+import { Sheet } from './Sheet';
+import { useOnline } from '../lib/useOnline';
+import { useExpenseSync } from '../lib/expensesApi';
+
+// Phone tabs: Home · Quotes · ＋ · Invoices · More. Expenses are in More and the ＋ menu
+// (on a laptop the rail has room to list them too).
+const TABS: { to: string; label: string; icon: IconName; end?: boolean; railOnly?: boolean }[] = [
+  { to: '/', label: 'Home', icon: 'home', end: true },
+  { to: '/quotes', label: 'Quotes', icon: 'quote' },
+  { to: '/invoices', label: 'Invoices', icon: 'invoice' },
+  { to: '/expenses', label: 'Expenses', icon: 'receipt', railOnly: true },
+  { to: '/more', label: 'More', icon: 'more' },
+];
+const PHONE_TABS = TABS.filter((t) => !t.railOnly);
+
+const QUICK_ACTIONS: { label: string; hint: string; icon: IconName; to?: string }[] = [
+  { label: 'New quote', hint: 'Price a job for a client', icon: 'quote', to: '/quotes/new' },
+  { label: 'New invoice', hint: 'Bill a client directly', icon: 'invoice', to: '/invoices/new' },
+  { label: 'Log expense', hint: 'Snap the slip; works without signal', icon: 'camera', to: '/expenses/new' },
+  { label: 'Record payment', hint: 'Money received for an invoice', icon: 'cash', to: '/invoices?filter=unpaid&for=payment' },
+];
+
+function TabLink({ to, label, icon, end }: Pick<(typeof TABS)[number], 'to' | 'label' | 'icon' | 'end'>) {
+  return (
+    <NavLink to={to} end={end} className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`}>
+      <Icon name={icon} />
+      <span>{label}</span>
+    </NavLink>
+  );
+}
+
+export function AppShell() {
+  const online = useOnline();
+  const navigate = useNavigate();
+  useExpenseSync(); // upload expenses saved without signal
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [first, second, third, fourth] = PHONE_TABS as [typeof TABS[number], typeof TABS[number], typeof TABS[number], typeof TABS[number]];
+
+  const newButton = (className: string) => (
+    <button type="button" className={className} onClick={() => setQuickOpen(true)} aria-haspopup="dialog">
+      <Icon name="plus" size={28} />
+      <span className={className === 'nav-new' ? 'visually-hidden' : ''}>New</span>
+    </button>
+  );
+
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <Logo />
+      </header>
+
+      {!online ? (
+        <div className="offline-banner" role="status">
+          <Icon name="wifiOff" size={18} />
+          You're offline. Expenses still save; other changes need signal.
+        </div>
+      ) : null}
+
+      <nav className="rail" aria-label="Main">
+        {newButton('rail-new btn btn-primary')}
+        {TABS.map((t) => (
+          <TabLink key={t.to} {...t} />
+        ))}
+      </nav>
+
+      <main className="content" id="main">
+        <Outlet />
+      </main>
+
+      <nav className="bottomnav" aria-label="Main">
+        <TabLink {...first} />
+        <TabLink {...second} />
+        {newButton('nav-new')}
+        <TabLink {...third} />
+        <TabLink {...fourth} />
+      </nav>
+
+      <Sheet open={quickOpen} onClose={() => setQuickOpen(false)} title="New">
+        <ul className="action-list">
+          {QUICK_ACTIONS.map((a) => (
+            <li key={a.label}>
+              <button
+                type="button"
+                className="action-row"
+                disabled={!a.to}
+                onClick={() => {
+                  if (!a.to) return;
+                  setQuickOpen(false);
+                  navigate(a.to);
+                }}
+              >
+                <span className="action-icon">
+                  <Icon name={a.icon} />
+                </span>
+                <span>
+                  <strong>{a.label}</strong>
+                  <span className="muted small block">{a.hint}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
+    </div>
+  );
+}
